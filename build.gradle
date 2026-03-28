@@ -56,11 +56,17 @@ sourceSets.main.resources {
 }
 
 repositories {
-    mavenCentral()
     maven {
         name = 'Forge'
         url = 'https://maven.minecraftforge.net'
     }
+
+    maven {
+        name = 'Minecraft Libraries'
+        url = 'https://libraries.minecraft.net'
+    }
+
+    mavenCentral()
 }
 
 dependencies {

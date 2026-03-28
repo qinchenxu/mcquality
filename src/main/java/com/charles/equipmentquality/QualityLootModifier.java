@@ -29,7 +29,7 @@ public final class QualityLootModifier extends LootModifier {
     }
 
     @Override
-    protected @NotNull ObjectArrayList<ItemStack> doApply(LootTable table, ObjectArrayList<ItemStack> generatedLoot, LootContext context) {
+    protected @NotNull ObjectArrayList<ItemStack> doApply(ObjectArrayList<ItemStack> generatedLoot, LootContext context) {
         for (ItemStack stack : generatedLoot) {
             EquipmentQualityData.assignRandomQuality(stack, context.getRandom());
         }

@@ -1,8 +1,6 @@
 package com.charles.equipmentquality;
 
 import net.minecraftforge.common.MinecraftForge;
-import net.minecraftforge.event.entity.player.ItemTooltipEvent;
-import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 
@@ -11,10 +9,9 @@ public final class EquipmentQualityMod {
     public static final String MOD_ID = "equipmentquality";
 
     public EquipmentQualityMod(FMLJavaModLoadingContext context) {
-        ModLootModifiers.GLOBAL_LOOT_MODIFIERS.register(context.getModBusGroup());
+        ModLootModifiers.GLOBAL_LOOT_MODIFIERS.register(context.getModEventBus());
 
-        PlayerEvent.ItemCraftedEvent.BUS.addListener(QualityEvents::onItemCrafted);
-        ItemTooltipEvent.BUS.addListener(QualityEvents::onItemTooltip);
-        MinecraftForge.EVENT_BUS.addListener(QualityEvents::onItemAttribute);
+        MinecraftForge.EVENT_BUS.addListener(QualityEvents::onItemCrafted);
+        MinecraftForge.EVENT_BUS.addListener(QualityEvents::onItemTooltip);
     }
 }

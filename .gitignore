@@ -1,0 +1,19 @@
+# Gradle
+.gradle/
+build/
+out/
+
+# Forge / MinecraftGradle
+run/
+run-data/
+src/generated/resources/
+.cache/
+
+# IDE
+.idea/
+*.iml
+.eclipse/
+bin/
+
+# macOS
+.DS_Store

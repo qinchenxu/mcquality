@@ -12,7 +12,6 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.component.CustomData;
-import net.minecraftforge.event.ItemAttributeModifierEvent;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -56,28 +55,6 @@ public final class EquipmentQualityData {
 
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY));
-    }
-
-    public static void applyAttributeModifiers(ItemAttributeModifierEvent event) {
-        ItemStack stack = event.getItemStack();
-        EquipmentQuality quality = getQuality(stack);
-        if (quality == null) {
-            return;
-        }
-
-        double amount = quality.multiplierBonus();
-        EquipmentSlot slot = event.getSlotType();
-
-        if (stack.getItem() instanceof ArmorItem armorItem && armorItem.getEquipmentSlot() == slot) {
-            event.addModifier(Attributes.ARMOR, new AttributeModifier(EquipmentQualityMod.MOD_ID + ".armor", amount, AttributeModifier.Operation.MULTIPLY_TOTAL));
-            event.addModifier(Attributes.ARMOR_TOUGHNESS, new AttributeModifier(EquipmentQualityMod.MOD_ID + ".armor_toughness", amount, AttributeModifier.Operation.MULTIPLY_TOTAL));
-            event.addModifier(Attributes.KNOCKBACK_RESISTANCE, new AttributeModifier(EquipmentQualityMod.MOD_ID + ".knockback_resistance", amount, AttributeModifier.Operation.MULTIPLY_TOTAL));
-        }
-
-        if (stack.getItem() instanceof TieredItem && slot == EquipmentSlot.MAINHAND) {
-            event.addModifier(Attributes.ATTACK_DAMAGE, new AttributeModifier(EquipmentQualityMod.MOD_ID + ".attack_damage", amount, AttributeModifier.Operation.MULTIPLY_TOTAL));
-            event.addModifier(Attributes.ATTACK_SPEED, new AttributeModifier(EquipmentQualityMod.MOD_ID + ".attack_speed", amount, AttributeModifier.Operation.MULTIPLY_TOTAL));
-        }
     }
 
     @Nullable
