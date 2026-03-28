@@ -1,0 +1,11 @@
+{
+  "itemGroup.equipmentquality": "Equipment Quality",
+  "quality.equipmentquality.worn": "Worn",
+  "quality.equipmentquality.normal": "Normal",
+  "quality.equipmentquality.uncommon": "Uncommon",
+  "quality.equipmentquality.rare": "Rare",
+  "quality.equipmentquality.epic": "Epic",
+  "quality.equipmentquality.legendary": "Legendary",
+  "tooltip.equipmentquality.quality": "Quality: %s",
+  "tooltip.equipmentquality.bonus": "Stat Multiplier: %s"
+}

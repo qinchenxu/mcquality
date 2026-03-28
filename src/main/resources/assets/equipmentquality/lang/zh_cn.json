@@ -1,0 +1,11 @@
+{
+  "itemGroup.equipmentquality": "装备品质",
+  "quality.equipmentquality.worn": "磨损",
+  "quality.equipmentquality.normal": "普通",
+  "quality.equipmentquality.uncommon": "罕见",
+  "quality.equipmentquality.rare": "稀有",
+  "quality.equipmentquality.epic": "史诗",
+  "quality.equipmentquality.legendary": "传说",
+  "tooltip.equipmentquality.quality": "品质: %s",
+  "tooltip.equipmentquality.bonus": "属性倍率: %s"
+}
