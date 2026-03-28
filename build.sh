@@ -9,4 +9,8 @@ echo "Gradle: $(gradle -v 2>/dev/null | grep '^Gradle')"
 echo ""
 
 cd "$(dirname "$0")"
-gradle build "$@"
+if [ "$#" -eq 0 ]; then
+	gradle build
+else
+	gradle "$@"
+fi

@@ -1,8 +1,8 @@
 plugins {
-    id 'eclipse'
+    id 'java-library'
     id 'idea'
     id 'maven-publish'
-    id 'net.minecraftforge.gradle' version '[6.0.24,6.2)'
+    id 'net.neoforged.moddev' version '2.0.141'
 }
 
 version = mod_version
@@ -14,39 +14,40 @@ base {
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-minecraft {
-    mappings channel: mapping_channel, version: mapping_version
-    copyIdeResources = true
+neoForge {
+    version = project.neo_version
 
     runs {
-        configureEach {
-            workingDirectory project.file('run')
-            property 'forge.logging.markers', 'REGISTRIES'
-            property 'forge.logging.console.level', 'debug'
-
-            mods {
-                "${mod_id}" {
-                    source sourceSets.main
-                }
-            }
-        }
-
         client {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            client()
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         server {
-            property 'forge.enabledGameTestNamespaces', mod_id
-            args '--nogui'
+            server()
+            programArgument '--nogui'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         gameTestServer {
-            property 'forge.enabledGameTestNamespaces', mod_id
+            type = 'gameTestServer'
+            systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
         }
 
         data {
-            workingDirectory project.file('run-data')
-            args '--mod', mod_id, '--all', '--output', file('src/generated/resources/'), '--existing', file('src/main/resources/')
+            data()
+            programArguments.addAll '--mod', project.mod_id, '--all', '--output', file('src/generated/resources/').getAbsolutePath(), '--existing', file('src/main/resources/').getAbsolutePath()
+        }
+
+        configureEach {
+            systemProperty 'forge.logging.markers', 'REGISTRIES'
+            logLevel = org.slf4j.event.Level.DEBUG
+        }
+    }
+
+    mods {
+        "${mod_id}" {
+            sourceSet(sourceSets.main)
         }
     }
 }
@@ -56,29 +57,14 @@ sourceSets.main.resources {
 }
 
 repositories {
-    maven {
-        name = 'Forge'
-        url = 'https://maven.minecraftforge.net'
-    }
-
-    maven {
-        name = 'Minecraft Libraries'
-        url = 'https://libraries.minecraft.net'
-    }
-
     mavenCentral()
-}
-
-dependencies {
-    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
 }
 
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
         minecraft_version: minecraft_version,
         minecraft_version_range: minecraft_version_range,
-        forge_version: forge_version,
-        forge_version_range: forge_version_range,
+        neo_version: neo_version,
         loader_version_range: loader_version_range,
         mod_id: mod_id,
         mod_name: mod_name,
@@ -90,7 +76,7 @@ tasks.named('processResources', ProcessResources).configure {
 
     inputs.properties replaceProperties
 
-    filesMatching(['META-INF/mods.toml', 'pack.mcmeta']) {
+    filesMatching(['META-INF/neoforge.mods.toml', 'pack.mcmeta']) {
         expand replaceProperties
     }
 }

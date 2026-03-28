@@ -13,6 +13,7 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TieredItem;
 import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.world.item.component.ItemLore;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.List;
@@ -54,6 +55,10 @@ public final class EquipmentQualityData {
             return;
         }
 
+        if (!stack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY).equals(ItemLore.EMPTY)) {
+            return;
+        }
+
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY));
     }
@@ -79,6 +84,16 @@ public final class EquipmentQualityData {
         tag.putString(QUALITY_TAG, quality.id());
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         applyQualityModifiers(stack, quality);
+        applyQualityLore(stack, quality);
+    }
+
+    public static void copyQuality(ItemStack source, ItemStack target) {
+        EquipmentQuality quality = getQuality(source);
+        if (quality == null || !isSupported(target) || getQuality(target) != null) {
+            return;
+        }
+
+        setQuality(target, quality);
     }
 
     private static void applyQualityModifiers(ItemStack stack, EquipmentQuality quality) {
@@ -99,6 +114,13 @@ public final class EquipmentQualityData {
         if (changed) {
             stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(baseModifiers.showInTooltip()));
         }
+    }
+
+    private static void applyQualityLore(ItemStack stack, EquipmentQuality quality) {
+        stack.set(DataComponents.LORE, new ItemLore(List.of(
+            Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY),
+            Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY)
+        )));
     }
 
     @Nullable
