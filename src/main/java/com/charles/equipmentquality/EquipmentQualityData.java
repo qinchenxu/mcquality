@@ -5,12 +5,13 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.entity.EquipmentSlot;
+import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TieredItem;
+import net.minecraft.world.item.component.ItemAttributeModifiers;
 import net.minecraft.world.item.component.CustomData;
 import org.jetbrains.annotations.Nullable;
 
@@ -77,5 +78,51 @@ public final class EquipmentQualityData {
 
         tag.putString(QUALITY_TAG, quality.id());
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
+        applyQualityModifiers(stack, quality);
+    }
+
+    private static void applyQualityModifiers(ItemStack stack, EquipmentQuality quality) {
+        ItemAttributeModifiers baseModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        double factor = 1.0D + quality.multiplierBonus();
+        if (factor <= 0.0D) {
+            return;
+        }
+
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
+        boolean changed = false;
+        for (ItemAttributeModifiers.Entry entry : baseModifiers.modifiers()) {
+            AttributeModifier scaledModifier = scaleModifier(entry.attribute().value(), entry.modifier(), factor);
+            builder.add(entry.attribute(), scaledModifier != null ? scaledModifier : entry.modifier(), entry.slot());
+            changed |= scaledModifier != null;
+        }
+
+        if (changed) {
+            stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(baseModifiers.showInTooltip()));
+        }
+    }
+
+    @Nullable
+    private static AttributeModifier scaleModifier(Attribute attribute, AttributeModifier modifier, double factor) {
+        double adjustedAmount = modifier.amount();
+
+        if (attribute == Attributes.ATTACK_DAMAGE.value()
+            || attribute == Attributes.ATTACK_KNOCKBACK.value()
+            || attribute == Attributes.ARMOR.value()
+            || attribute == Attributes.ARMOR_TOUGHNESS.value()
+            || attribute == Attributes.KNOCKBACK_RESISTANCE.value()
+            || attribute == Attributes.MINING_EFFICIENCY.value()
+            || attribute == Attributes.BLOCK_BREAK_SPEED.value()) {
+            adjustedAmount *= factor;
+        } else if (attribute == Attributes.ATTACK_SPEED.value()) {
+            adjustedAmount = adjustedAmount < 0.0D ? adjustedAmount / factor : adjustedAmount * factor;
+        } else {
+            return null;
+        }
+
+        if (Double.compare(adjustedAmount, modifier.amount()) == 0) {
+            return null;
+        }
+
+        return new AttributeModifier(modifier.id(), adjustedAmount, modifier.operation());
     }
 }
