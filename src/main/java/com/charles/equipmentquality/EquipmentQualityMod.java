@@ -10,6 +10,8 @@ public final class EquipmentQualityMod {
 
     public EquipmentQualityMod(IEventBus modEventBus) {
         ModLootModifiers.GLOBAL_LOOT_MODIFIERS.register(modEventBus);
+        ModParticles.PARTICLE_TYPES.register(modEventBus);
+        ModNetwork.register(modEventBus);
 
         NeoForge.EVENT_BUS.addListener(QualityEvents::onItemCrafted);
         NeoForge.EVENT_BUS.addListener(QualityEvents::onItemTooltip);

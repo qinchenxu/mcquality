@@ -4,6 +4,7 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -16,10 +17,14 @@ import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class EquipmentQualityData {
     private static final String QUALITY_TAG = "EquipmentQuality";
+    private static final String ACTIVE_SKILL_TAG = "EquipmentQualityActiveSkill";
+    private static final String PASSIVE_EFFECT_TAG = "EquipmentQualityPassiveEffect";
 
     private EquipmentQualityData() {
     }
@@ -61,6 +66,96 @@ public final class EquipmentQualityData {
 
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY));
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY));
+        if (supportsDetailsPanel(stack)) {
+            tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".details_hint").withStyle(ChatFormatting.DARK_GRAY));
+        }
+    }
+
+    public static boolean supportsDetailsPanel(ItemStack stack) {
+        return stack.getItem() instanceof TieredItem;
+    }
+
+    public static List<DetailSection> getDetailSections(ItemStack stack) {
+        List<DetailSection> sections = new ArrayList<>();
+        EquipmentQuality quality = getQuality(stack);
+
+        List<Component> summaryLines = new ArrayList<>();
+        summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.rarity", quality != null ? quality.displayName() : Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.none").withStyle(ChatFormatting.GRAY)));
+        summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.type", getEquipmentTypeLabel(stack)));
+        summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.attr", quality != null ? Component.literal(quality.signedPercent()).withStyle(quality.color()) : Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.attr.none").withStyle(ChatFormatting.GRAY)));
+        sections.add(new DetailSection(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.summary"), summaryLines));
+
+        sections.add(new DetailSection(
+            Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.attributes"),
+            getAttributeLines(stack)
+        ));
+
+        sections.add(new DetailSection(
+            Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.active_skill"),
+            getActiveSkillLines(stack)
+        ));
+
+        sections.add(new DetailSection(
+            Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.passive"),
+            getPassiveLines(stack)
+        ));
+
+        sections.add(new DetailSection(
+            Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.controls"),
+            List.of(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.hint"))
+        ));
+
+        return sections;
+    }
+
+    public record DetailSection(Component title, List<Component> lines) {
+    }
+
+    private static List<Component> getAttributeLines(ItemStack stack) {
+        List<Component> lines = new ArrayList<>();
+        ItemAttributeModifiers attributeModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        if (attributeModifiers.modifiers().isEmpty()) {
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_attributes").withStyle(ChatFormatting.GRAY));
+            return lines;
+        }
+
+        for (ItemAttributeModifiers.Entry entry : attributeModifiers.modifiers()) {
+            lines.add(formatAttributeLine(entry.attribute().value(), entry.modifier()));
+        }
+
+        return lines;
+    }
+
+    private static List<Component> getActiveSkillLines(ItemStack stack) {
+        List<Component> lines = new ArrayList<>();
+        EquipmentActiveSkill skill = getActiveSkill(stack);
+        if (skill == null) {
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_active_skill").withStyle(ChatFormatting.GRAY));
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill_hint").withStyle(ChatFormatting.DARK_GRAY));
+            return lines;
+        }
+
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill.name", skill.displayName()));
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill.desc", skill.description()));
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill.trigger", skill.triggerName()));
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill.cooldown", formatCooldownSeconds(skill.cooldownTicks())));
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill.particle", skill.particleStyleName()));
+        return lines;
+    }
+
+    private static List<Component> getPassiveLines(ItemStack stack) {
+        List<Component> lines = new ArrayList<>();
+        EquipmentPassiveEffect passiveEffect = getPassiveEffect(stack);
+        if (passiveEffect == null) {
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_passive").withStyle(ChatFormatting.GRAY));
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.passive_hint").withStyle(ChatFormatting.DARK_GRAY));
+            return lines;
+        }
+
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.passive.name", passiveEffect.displayName()));
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.passive.desc", passiveEffect.description()));
+        lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.passive.value", passiveEffect.formatValue()));
+        return lines;
     }
 
     @Nullable
@@ -74,6 +169,28 @@ public final class EquipmentQualityData {
         return EquipmentQuality.byId(tag.getString(QUALITY_TAG));
     }
 
+    @Nullable
+    public static EquipmentActiveSkill getActiveSkill(ItemStack stack) {
+        CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        CompoundTag tag = customData.copyTag();
+        if (tag == null || !tag.contains(ACTIVE_SKILL_TAG)) {
+            return null;
+        }
+
+        return EquipmentActiveSkill.byId(tag.getString(ACTIVE_SKILL_TAG));
+    }
+
+    @Nullable
+    public static EquipmentPassiveEffect getPassiveEffect(ItemStack stack) {
+        CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        CompoundTag tag = customData.copyTag();
+        if (tag == null || !tag.contains(PASSIVE_EFFECT_TAG)) {
+            return null;
+        }
+
+        return EquipmentPassiveEffect.byId(tag.getString(PASSIVE_EFFECT_TAG));
+    }
+
     private static void setQuality(ItemStack stack, EquipmentQuality quality) {
         CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
         CompoundTag tag = customData.copyTag();
@@ -82,6 +199,7 @@ public final class EquipmentQualityData {
         }
 
         tag.putString(QUALITY_TAG, quality.id());
+    writeDerivedDetails(tag, stack, quality);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
         applyQualityModifiers(stack, quality);
         applyQualityLore(stack, quality);
@@ -94,6 +212,93 @@ public final class EquipmentQualityData {
         }
 
         setQuality(target, quality);
+    }
+
+    private static Component getEquipmentTypeLabel(ItemStack stack) {
+        String suffix;
+        if (stack.getItem() instanceof ArmorItem) {
+            suffix = "armor";
+        } else if (stack.getItem() instanceof TieredItem) {
+            suffix = "weapon";
+        } else {
+            suffix = "other";
+        }
+
+        return Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.type." + suffix);
+    }
+
+    private static void writeDerivedDetails(CompoundTag tag, ItemStack stack, EquipmentQuality quality) {
+        EquipmentActiveSkill activeSkill = pickActiveSkill(stack, quality);
+        EquipmentPassiveEffect passiveEffect = pickPassiveEffect(stack, quality);
+
+        if (activeSkill != null) {
+            tag.putString(ACTIVE_SKILL_TAG, activeSkill.id());
+        } else {
+            tag.remove(ACTIVE_SKILL_TAG);
+        }
+
+        if (passiveEffect != null) {
+            tag.putString(PASSIVE_EFFECT_TAG, passiveEffect.id());
+        } else {
+            tag.remove(PASSIVE_EFFECT_TAG);
+        }
+    }
+
+    @Nullable
+    private static EquipmentActiveSkill pickActiveSkill(ItemStack stack, EquipmentQuality quality) {
+        if (!(stack.getItem() instanceof TieredItem)) {
+            return null;
+        }
+
+        return switch (quality) {
+            case RARE -> EquipmentActiveSkill.ARC_SLASH;
+            case EPIC -> EquipmentActiveSkill.GUARD_PULSE;
+            case LEGENDARY -> EquipmentActiveSkill.SHOCK_BURST;
+            default -> null;
+        };
+    }
+
+    @Nullable
+    private static EquipmentPassiveEffect pickPassiveEffect(ItemStack stack, EquipmentQuality quality) {
+        if (!(stack.getItem() instanceof TieredItem)) {
+            return null;
+        }
+
+        return switch (quality) {
+            case NORMAL -> EquipmentPassiveEffect.STEADY_EDGE;
+            case UNCOMMON -> EquipmentPassiveEffect.SWIFT_STRIKE;
+            case RARE -> EquipmentPassiveEffect.STEADY_EDGE;
+            case EPIC -> EquipmentPassiveEffect.TITAN_GRIP;
+            case LEGENDARY -> EquipmentPassiveEffect.GUARD_BREAKER;
+            default -> null;
+        };
+    }
+
+    private static Component formatAttributeLine(Attribute attribute, AttributeModifier modifier) {
+        MutableComponent label = Component.translatable(attribute.getDescriptionId()).withStyle(ChatFormatting.GRAY);
+        MutableComponent amount = Component.literal(formatModifierAmount(modifier)).withStyle(modifier.amount() >= 0.0D ? ChatFormatting.GREEN : ChatFormatting.RED);
+        return Component.empty().append(label).append(Component.literal(": ")).append(amount);
+    }
+
+    private static String formatModifierAmount(AttributeModifier modifier) {
+        double amount = modifier.amount();
+        return switch (modifier.operation()) {
+            case ADD_VALUE -> formatSignedDecimal(amount);
+            case ADD_MULTIPLIED_BASE, ADD_MULTIPLIED_TOTAL -> formatSignedDecimal(amount * 100.0D) + "%";
+        };
+    }
+
+    private static String formatSignedDecimal(double value) {
+        String sign = value >= 0.0D ? "+" : "";
+        String formatted = String.format(Locale.ROOT, "%.1f", value);
+        if (formatted.endsWith(".0")) {
+            formatted = formatted.substring(0, formatted.length() - 2);
+        }
+        return sign + formatted;
+    }
+
+    private static String formatCooldownSeconds(int cooldownTicks) {
+        return String.format(Locale.ROOT, "%.1fs", cooldownTicks / 20.0D);
     }
 
     private static void applyQualityModifiers(ItemStack stack, EquipmentQuality quality) {
