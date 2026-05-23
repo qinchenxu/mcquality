@@ -3,6 +3,8 @@ package com.charles.equipmentquality;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.RandomSource;
@@ -22,9 +24,23 @@ import java.util.List;
 import java.util.Locale;
 
 public final class EquipmentQualityData {
-    private static final String QUALITY_TAG = "EquipmentQuality";
-    private static final String ACTIVE_SKILL_TAG = "EquipmentQualityActiveSkill";
-    private static final String PASSIVE_EFFECT_TAG = "EquipmentQualityPassiveEffect";
+    private static final String DATA_ROOT_TAG = "EquipmentQuality";
+    private static final String LEGACY_ACTIVE_SKILL_TAG = "EquipmentQualityActiveSkill";
+    private static final String LEGACY_PASSIVE_EFFECT_TAG = "EquipmentQualityPassiveEffect";
+    private static final int DATA_VERSION = 2;
+
+    private static final String VERSION_TAG = "version";
+    private static final String RARITY_TAG = "rarity";
+    private static final String AFFIXES_TAG = "affixes";
+    private static final String ACTIVE_SKILL_DATA_TAG = "active_skill";
+    private static final String PASSIVE_EFFECTS_TAG = "passive_effects";
+    private static final String ID_TAG = "id";
+    private static final String TRIGGER_TAG = "trigger";
+    private static final String COOLDOWN_TICKS_TAG = "cooldown_ticks";
+    private static final String PARTICLE_STYLE_TAG = "particle_style";
+    private static final String PRIMARY_VALUE_TAG = "primary_value";
+    private static final String VALUE_TAG = "value";
+    private static final String UNIT_TAG = "unit";
 
     private EquipmentQualityData() {
     }
@@ -48,7 +64,7 @@ public final class EquipmentQualityData {
         for (EquipmentQuality quality : EquipmentQuality.values()) {
             current += quality.weight();
             if (roll < current) {
-                setQuality(stack, quality);
+                setQuality(stack, quality, random);
                 return;
             }
         }
@@ -65,7 +81,20 @@ public final class EquipmentQualityData {
         }
 
         tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY));
-        tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY));
+        if (isStructuredData(stack)) {
+            tooltip.add(Component.translatable(
+                "tooltip." + EquipmentQualityMod.MOD_ID + ".affix_count",
+                Component.literal(Integer.toString(getAffixes(stack).size())).withStyle(quality.color())
+            ).withStyle(ChatFormatting.DARK_GRAY));
+
+            EquipmentActiveSkill activeSkill = getActiveSkill(stack);
+            if (activeSkill != null) {
+                tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".active_skill", activeSkill.displayName()).withStyle(ChatFormatting.DARK_GRAY));
+            }
+        } else {
+            tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY));
+        }
+
         if (supportsDetailsPanel(stack)) {
             tooltip.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".details_hint").withStyle(ChatFormatting.DARK_GRAY));
         }
@@ -78,16 +107,29 @@ public final class EquipmentQualityData {
     public static List<DetailSection> getDetailSections(ItemStack stack) {
         List<DetailSection> sections = new ArrayList<>();
         EquipmentQuality quality = getQuality(stack);
+        List<EquipmentAffixInstance> affixes = getAffixes(stack);
 
         List<Component> summaryLines = new ArrayList<>();
         summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.rarity", quality != null ? quality.displayName() : Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.none").withStyle(ChatFormatting.GRAY)));
         summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.type", getEquipmentTypeLabel(stack)));
-        summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.attr", quality != null ? Component.literal(quality.signedPercent()).withStyle(quality.color()) : Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.attr.none").withStyle(ChatFormatting.GRAY)));
+        if (isStructuredData(stack)) {
+            summaryLines.add(Component.translatable(
+                "screen." + EquipmentQualityMod.MOD_ID + ".details.affix_count",
+                Component.literal(Integer.toString(affixes.size())).withStyle(quality != null ? quality.color() : ChatFormatting.GRAY)
+            ));
+        } else {
+            summaryLines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.attr", quality != null ? Component.literal(quality.signedPercent()).withStyle(quality.color()) : Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.attr.none").withStyle(ChatFormatting.GRAY)));
+        }
         sections.add(new DetailSection(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.summary"), summaryLines));
 
         sections.add(new DetailSection(
             Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.attributes"),
             getAttributeLines(stack)
+        ));
+
+        sections.add(new DetailSection(
+            Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.section.affixes"),
+            getAffixLines(stack)
         ));
 
         sections.add(new DetailSection(
@@ -126,6 +168,28 @@ public final class EquipmentQualityData {
         return lines;
     }
 
+    private static List<Component> getAffixLines(ItemStack stack) {
+        List<EquipmentAffixInstance> affixes = getAffixes(stack);
+        if (affixes.isEmpty()) {
+            return List.of(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_affixes").withStyle(ChatFormatting.GRAY));
+        }
+
+        List<Component> lines = new ArrayList<>();
+        for (EquipmentAffixInstance affix : affixes) {
+            EquipmentAffixDefinition definition = EquipmentAffixDefinition.byId(affix.id());
+            if (definition == null) {
+                continue;
+            }
+
+            lines.add(definition.buildDisplayLine(affix));
+        }
+
+        if (lines.isEmpty()) {
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_affixes").withStyle(ChatFormatting.GRAY));
+        }
+        return lines;
+    }
+
     private static List<Component> getActiveSkillLines(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
         EquipmentActiveSkill skill = getActiveSkill(stack);
@@ -160,49 +224,101 @@ public final class EquipmentQualityData {
 
     @Nullable
     public static EquipmentQuality getQuality(ItemStack stack) {
+        CompoundTag dataRoot = getDataRoot(stack);
+        if (dataRoot != null && dataRoot.contains(RARITY_TAG, Tag.TAG_STRING)) {
+            return EquipmentQuality.byId(dataRoot.getString(RARITY_TAG));
+        }
+
         CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
         CompoundTag tag = customData.copyTag();
-        if (tag == null || !tag.contains(QUALITY_TAG)) {
+        if (tag == null || !tag.contains(DATA_ROOT_TAG, Tag.TAG_STRING)) {
             return null;
         }
 
-        return EquipmentQuality.byId(tag.getString(QUALITY_TAG));
+        return EquipmentQuality.byId(tag.getString(DATA_ROOT_TAG));
     }
 
     @Nullable
     public static EquipmentActiveSkill getActiveSkill(ItemStack stack) {
+        CompoundTag dataRoot = getDataRoot(stack);
+        if (dataRoot != null && dataRoot.contains(ACTIVE_SKILL_DATA_TAG, Tag.TAG_COMPOUND)) {
+            CompoundTag activeSkillTag = dataRoot.getCompound(ACTIVE_SKILL_DATA_TAG);
+            if (activeSkillTag.contains(ID_TAG, Tag.TAG_STRING)) {
+                return EquipmentActiveSkill.byId(activeSkillTag.getString(ID_TAG));
+            }
+        }
+
         CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
         CompoundTag tag = customData.copyTag();
-        if (tag == null || !tag.contains(ACTIVE_SKILL_TAG)) {
+        if (tag == null || !tag.contains(LEGACY_ACTIVE_SKILL_TAG, Tag.TAG_STRING)) {
             return null;
         }
 
-        return EquipmentActiveSkill.byId(tag.getString(ACTIVE_SKILL_TAG));
+        return EquipmentActiveSkill.byId(tag.getString(LEGACY_ACTIVE_SKILL_TAG));
     }
 
     @Nullable
     public static EquipmentPassiveEffect getPassiveEffect(ItemStack stack) {
+        CompoundTag dataRoot = getDataRoot(stack);
+        if (dataRoot != null && dataRoot.contains(PASSIVE_EFFECTS_TAG, Tag.TAG_LIST)) {
+            ListTag passiveEffects = dataRoot.getList(PASSIVE_EFFECTS_TAG, Tag.TAG_COMPOUND);
+            if (!passiveEffects.isEmpty()) {
+                CompoundTag passiveEffectTag = passiveEffects.getCompound(0);
+                if (passiveEffectTag.contains(ID_TAG, Tag.TAG_STRING)) {
+                    return EquipmentPassiveEffect.byId(passiveEffectTag.getString(ID_TAG));
+                }
+            }
+        }
+
         CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
         CompoundTag tag = customData.copyTag();
-        if (tag == null || !tag.contains(PASSIVE_EFFECT_TAG)) {
+        if (tag == null || !tag.contains(LEGACY_PASSIVE_EFFECT_TAG, Tag.TAG_STRING)) {
             return null;
         }
 
-        return EquipmentPassiveEffect.byId(tag.getString(PASSIVE_EFFECT_TAG));
+        return EquipmentPassiveEffect.byId(tag.getString(LEGACY_PASSIVE_EFFECT_TAG));
     }
 
-    private static void setQuality(ItemStack stack, EquipmentQuality quality) {
+    public static List<EquipmentAffixInstance> getAffixes(ItemStack stack) {
+        CompoundTag dataRoot = getDataRoot(stack);
+        if (dataRoot == null || !dataRoot.contains(AFFIXES_TAG, Tag.TAG_LIST)) {
+            return List.of();
+        }
+
+        ListTag affixTags = dataRoot.getList(AFFIXES_TAG, Tag.TAG_COMPOUND);
+        List<EquipmentAffixInstance> affixes = new ArrayList<>();
+        for (int index = 0; index < affixTags.size(); index++) {
+            EquipmentAffixInstance affix = EquipmentAffixInstance.fromTag(affixTags.getCompound(index));
+            if (affix != null) {
+                affixes.add(affix);
+            }
+        }
+
+        return affixes;
+    }
+
+    private static void setQuality(ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
         CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
         CompoundTag tag = customData.copyTag();
         if (tag == null) {
             tag = new CompoundTag();
         }
 
-        tag.putString(QUALITY_TAG, quality.id());
-    writeDerivedDetails(tag, stack, quality);
+        CompoundTag dataRoot = getOrCreateDataRoot(tag);
+        dataRoot.putString(RARITY_TAG, quality.id());
+        List<EquipmentAffixInstance> affixes = random != null ? EquipmentAffixDefinition.rollAffixes(stack, quality, random) : List.of();
+        writeAffixes(dataRoot, affixes);
+
+        GeneratedDetails details = writeDerivedDetails(dataRoot, stack, quality, random);
+        tag.remove(LEGACY_ACTIVE_SKILL_TAG);
+        tag.remove(LEGACY_PASSIVE_EFFECT_TAG);
         stack.set(DataComponents.CUSTOM_DATA, CustomData.of(tag));
-        applyQualityModifiers(stack, quality);
-        applyQualityLore(stack, quality);
+        if (random != null) {
+            applyAffixModifiers(stack, affixes);
+        } else {
+            applyQualityModifiers(stack, quality);
+        }
+        applyQualityLore(stack, quality, affixes.size(), details.activeSkill());
     }
 
     public static void copyQuality(ItemStack source, ItemStack target) {
@@ -211,7 +327,28 @@ public final class EquipmentQualityData {
             return;
         }
 
-        setQuality(target, quality);
+        CompoundTag sourceDataRoot = getDataRoot(source);
+        if (sourceDataRoot != null) {
+            CustomData customData = target.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+            CompoundTag targetTag = customData.copyTag();
+            if (targetTag == null) {
+                targetTag = new CompoundTag();
+            }
+
+            targetTag.put(DATA_ROOT_TAG, sourceDataRoot.copy());
+            targetTag.remove(LEGACY_ACTIVE_SKILL_TAG);
+            targetTag.remove(LEGACY_PASSIVE_EFFECT_TAG);
+            target.set(DataComponents.CUSTOM_DATA, CustomData.of(targetTag));
+            target.set(DataComponents.ATTRIBUTE_MODIFIERS, source.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY));
+
+            ItemLore sourceLore = source.get(DataComponents.LORE);
+            if (sourceLore != null) {
+                target.set(DataComponents.LORE, sourceLore);
+            }
+            return;
+        }
+
+        setQuality(target, quality, null);
     }
 
     private static Component getEquipmentTypeLabel(ItemStack stack) {
@@ -227,51 +364,128 @@ public final class EquipmentQualityData {
         return Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.type." + suffix);
     }
 
-    private static void writeDerivedDetails(CompoundTag tag, ItemStack stack, EquipmentQuality quality) {
-        EquipmentActiveSkill activeSkill = pickActiveSkill(stack, quality);
-        EquipmentPassiveEffect passiveEffect = pickPassiveEffect(stack, quality);
+    private static GeneratedDetails writeDerivedDetails(CompoundTag dataRoot, ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
+        EquipmentActiveSkill activeSkill = pickActiveSkill(stack, quality, random);
+        EquipmentPassiveEffect passiveEffect = pickPassiveEffect(stack, quality, random);
 
         if (activeSkill != null) {
-            tag.putString(ACTIVE_SKILL_TAG, activeSkill.id());
+            CompoundTag activeSkillTag = new CompoundTag();
+            activeSkillTag.putString(ID_TAG, activeSkill.id());
+            activeSkillTag.putString(TRIGGER_TAG, activeSkill.triggerId());
+            activeSkillTag.putInt(COOLDOWN_TICKS_TAG, activeSkill.cooldownTicks());
+            activeSkillTag.putString(PARTICLE_STYLE_TAG, activeSkill.particleStyleId());
+            activeSkillTag.putDouble(PRIMARY_VALUE_TAG, activeSkill.primaryValue());
+            dataRoot.put(ACTIVE_SKILL_DATA_TAG, activeSkillTag);
         } else {
-            tag.remove(ACTIVE_SKILL_TAG);
+            dataRoot.remove(ACTIVE_SKILL_DATA_TAG);
         }
 
+        ListTag passiveEffects = new ListTag();
         if (passiveEffect != null) {
-            tag.putString(PASSIVE_EFFECT_TAG, passiveEffect.id());
+            CompoundTag passiveEffectTag = new CompoundTag();
+            passiveEffectTag.putString(ID_TAG, passiveEffect.id());
+            passiveEffectTag.putDouble(VALUE_TAG, passiveEffect.value());
+            passiveEffectTag.putString(UNIT_TAG, passiveEffect.percent() ? "percent" : "flat");
+            passiveEffects.add(passiveEffectTag);
+        }
+
+        dataRoot.put(PASSIVE_EFFECTS_TAG, passiveEffects);
+        return new GeneratedDetails(activeSkill, passiveEffect);
+    }
+
+    @Nullable
+    private static CompoundTag getDataRoot(ItemStack stack) {
+        CustomData customData = stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY);
+        CompoundTag tag = customData.copyTag();
+        if (tag == null || !tag.contains(DATA_ROOT_TAG, Tag.TAG_COMPOUND)) {
+            return null;
+        }
+
+        return tag.getCompound(DATA_ROOT_TAG);
+    }
+
+    private static CompoundTag getOrCreateDataRoot(CompoundTag tag) {
+        CompoundTag dataRoot;
+        if (tag.contains(DATA_ROOT_TAG, Tag.TAG_COMPOUND)) {
+            dataRoot = tag.getCompound(DATA_ROOT_TAG);
         } else {
-            tag.remove(PASSIVE_EFFECT_TAG);
+            dataRoot = new CompoundTag();
+            tag.put(DATA_ROOT_TAG, dataRoot);
         }
+
+        dataRoot.putInt(VERSION_TAG, DATA_VERSION);
+        return dataRoot;
     }
 
     @Nullable
-    private static EquipmentActiveSkill pickActiveSkill(ItemStack stack, EquipmentQuality quality) {
+    private static EquipmentActiveSkill pickActiveSkill(ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
         if (!(stack.getItem() instanceof TieredItem)) {
             return null;
         }
 
-        return switch (quality) {
-            case RARE -> EquipmentActiveSkill.ARC_SLASH;
-            case EPIC -> EquipmentActiveSkill.GUARD_PULSE;
-            case LEGENDARY -> EquipmentActiveSkill.SHOCK_BURST;
-            default -> null;
-        };
+        if (random == null) {
+            return switch (quality) {
+                case RARE -> EquipmentActiveSkill.ARC_SLASH;
+                case EPIC -> EquipmentActiveSkill.GUARD_PULSE;
+                case LEGENDARY -> EquipmentActiveSkill.SHOCK_BURST;
+                default -> null;
+            };
+        }
+
+        if (random.nextDouble() > quality.skillChance()) {
+            return null;
+        }
+
+        List<EquipmentActiveSkill> candidates = new ArrayList<>();
+        if (quality.displayPriority() >= EquipmentQuality.UNCOMMON.displayPriority()) {
+            candidates.add(EquipmentActiveSkill.ARC_SLASH);
+        }
+        if (quality.displayPriority() >= EquipmentQuality.RARE.displayPriority()) {
+            candidates.add(EquipmentActiveSkill.GUARD_PULSE);
+        }
+        if (quality.displayPriority() >= EquipmentQuality.EPIC.displayPriority()) {
+            candidates.add(EquipmentActiveSkill.SHOCK_BURST);
+        }
+
+        return candidates.isEmpty() ? null : candidates.get(random.nextInt(candidates.size()));
     }
 
     @Nullable
-    private static EquipmentPassiveEffect pickPassiveEffect(ItemStack stack, EquipmentQuality quality) {
+    private static EquipmentPassiveEffect pickPassiveEffect(ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
         if (!(stack.getItem() instanceof TieredItem)) {
             return null;
         }
 
-        return switch (quality) {
-            case NORMAL -> EquipmentPassiveEffect.STEADY_EDGE;
-            case UNCOMMON -> EquipmentPassiveEffect.SWIFT_STRIKE;
-            case RARE -> EquipmentPassiveEffect.STEADY_EDGE;
-            case EPIC -> EquipmentPassiveEffect.TITAN_GRIP;
-            case LEGENDARY -> EquipmentPassiveEffect.GUARD_BREAKER;
-            default -> null;
-        };
+        if (random == null) {
+            return switch (quality) {
+                case NORMAL -> EquipmentPassiveEffect.STEADY_EDGE;
+                case UNCOMMON -> EquipmentPassiveEffect.SWIFT_STRIKE;
+                case RARE -> EquipmentPassiveEffect.STEADY_EDGE;
+                case EPIC -> EquipmentPassiveEffect.TITAN_GRIP;
+                case LEGENDARY -> EquipmentPassiveEffect.GUARD_BREAKER;
+                default -> null;
+            };
+        }
+
+        List<EquipmentPassiveEffect> candidates = new ArrayList<>();
+        if (quality.displayPriority() >= EquipmentQuality.NORMAL.displayPriority()) {
+            candidates.add(EquipmentPassiveEffect.STEADY_EDGE);
+        }
+        if (quality.displayPriority() >= EquipmentQuality.UNCOMMON.displayPriority()) {
+            candidates.add(EquipmentPassiveEffect.SWIFT_STRIKE);
+        }
+        if (quality.displayPriority() >= EquipmentQuality.RARE.displayPriority()) {
+            candidates.add(EquipmentPassiveEffect.TITAN_GRIP);
+        }
+        if (quality.displayPriority() >= EquipmentQuality.EPIC.displayPriority()) {
+            candidates.add(EquipmentPassiveEffect.GUARD_BREAKER);
+        }
+
+        if (candidates.isEmpty()) {
+            return null;
+        }
+
+        return candidates.get(random.nextInt(candidates.size()));
     }
 
     private static Component formatAttributeLine(Attribute attribute, AttributeModifier modifier) {
@@ -301,6 +515,38 @@ public final class EquipmentQualityData {
         return String.format(Locale.ROOT, "%.1fs", cooldownTicks / 20.0D);
     }
 
+    private static void writeAffixes(CompoundTag dataRoot, List<EquipmentAffixInstance> affixes) {
+        ListTag affixTags = new ListTag();
+        for (EquipmentAffixInstance affix : affixes) {
+            affixTags.add(affix.toTag());
+        }
+
+        dataRoot.put(AFFIXES_TAG, affixTags);
+    }
+
+    private static boolean isStructuredData(ItemStack stack) {
+        return getDataRoot(stack) != null;
+    }
+
+    private static void applyAffixModifiers(ItemStack stack, List<EquipmentAffixInstance> affixes) {
+        ItemAttributeModifiers baseModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
+        for (ItemAttributeModifiers.Entry entry : baseModifiers.modifiers()) {
+            builder.add(entry.attribute(), entry.modifier(), entry.slot());
+        }
+
+        for (EquipmentAffixInstance affix : affixes) {
+            EquipmentAffixDefinition definition = EquipmentAffixDefinition.byId(affix.id());
+            if (definition == null) {
+                continue;
+            }
+
+            builder.add(definition.attribute(), definition.createModifier(affix), EquipmentAffixDefinition.resolveSlotGroup(stack));
+        }
+
+        stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(baseModifiers.showInTooltip()));
+    }
+
     private static void applyQualityModifiers(ItemStack stack, EquipmentQuality quality) {
         ItemAttributeModifiers baseModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
         double factor = 1.0D + quality.multiplierBonus();
@@ -321,11 +567,22 @@ public final class EquipmentQualityData {
         }
     }
 
-    private static void applyQualityLore(ItemStack stack, EquipmentQuality quality) {
-        stack.set(DataComponents.LORE, new ItemLore(List.of(
-            Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY),
-            Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".bonus", Component.literal(quality.signedPercent()).withStyle(quality.color())).withStyle(ChatFormatting.DARK_GRAY)
-        )));
+    private static void applyQualityLore(ItemStack stack, EquipmentQuality quality, int affixCount, @Nullable EquipmentActiveSkill activeSkill) {
+        List<Component> loreLines = new ArrayList<>();
+        loreLines.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY));
+        loreLines.add(Component.translatable(
+            "tooltip." + EquipmentQualityMod.MOD_ID + ".affix_count",
+            Component.literal(Integer.toString(affixCount)).withStyle(quality.color())
+        ).withStyle(ChatFormatting.DARK_GRAY));
+
+        if (activeSkill != null) {
+            loreLines.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".active_skill", activeSkill.displayName()).withStyle(ChatFormatting.DARK_GRAY));
+        }
+        if (supportsDetailsPanel(stack)) {
+            loreLines.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".details_hint").withStyle(ChatFormatting.DARK_GRAY));
+        }
+
+        stack.set(DataComponents.LORE, new ItemLore(loreLines));
     }
 
     @Nullable
@@ -351,5 +608,8 @@ public final class EquipmentQualityData {
         }
 
         return new AttributeModifier(modifier.id(), adjustedAmount, modifier.operation());
+    }
+
+    private record GeneratedDetails(@Nullable EquipmentActiveSkill activeSkill, @Nullable EquipmentPassiveEffect passiveEffect) {
     }
 }

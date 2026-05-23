@@ -15,5 +15,8 @@ public final class EquipmentQualityMod {
 
         NeoForge.EVENT_BUS.addListener(QualityEvents::onItemCrafted);
         NeoForge.EVENT_BUS.addListener(QualityEvents::onItemTooltip);
+        NeoForge.EVENT_BUS.addListener(ActiveSkillEvents::onRightClickItem);
+        NeoForge.EVENT_BUS.addListener(ActiveSkillEvents::onRightClickBlock);
+        NeoForge.EVENT_BUS.addListener(ActiveSkillEvents::onEntityInteract);
     }
 }

@@ -67,14 +67,17 @@ public final class EquipmentDetailsScreen extends Screen {
             leftY = drawSection(guiGraphics, sections.get(1), leftColumnX, leftY, columnWidth, contentBottom);
         }
         if (sections.size() > 2) {
-            rightY = drawSection(guiGraphics, sections.get(2), rightColumnX, rightY, columnWidth, contentBottom);
+            leftY = drawSection(guiGraphics, sections.get(2), leftColumnX, leftY, columnWidth, contentBottom);
         }
         if (sections.size() > 3) {
             rightY = drawSection(guiGraphics, sections.get(3), rightColumnX, rightY, columnWidth, contentBottom);
         }
         if (sections.size() > 4) {
+            rightY = drawSection(guiGraphics, sections.get(4), rightColumnX, rightY, columnWidth, contentBottom);
+        }
+        if (sections.size() > 5) {
             int footerTop = Math.max(leftY, rightY) + 2;
-            drawSection(guiGraphics, sections.get(4), leftColumnX, footerTop, panelWidth - 24, contentBottom);
+            drawSection(guiGraphics, sections.get(5), leftColumnX, footerTop, panelWidth - 24, contentBottom);
         }
 
         guiGraphics.drawCenteredString(this.font, Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.close_hint"), this.width / 2, top + panelHeight - 12, 0xA0A0A0);
