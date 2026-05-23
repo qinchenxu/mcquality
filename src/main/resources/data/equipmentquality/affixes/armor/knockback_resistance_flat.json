@@ -1,0 +1,17 @@
+{
+  "id": "armor.knockback_resistance_flat",
+  "equipment_types": ["armor"],
+  "category": "defense",
+  "value": {
+    "min": 0.03,
+    "max": 0.12,
+    "precision": 2,
+    "unit": "flat"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.knockback_resistance",
+    "mode": "add_flat"
+  },
+  "display_order": 30,
+  "weight": 8
+}

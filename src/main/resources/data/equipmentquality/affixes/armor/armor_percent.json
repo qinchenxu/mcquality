@@ -1,0 +1,17 @@
+{
+  "id": "armor.armor_percent",
+  "equipment_types": ["armor"],
+  "category": "defense",
+  "value": {
+    "min": 4.0,
+    "max": 16.0,
+    "precision": 1,
+    "unit": "percent"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.armor",
+    "mode": "multiply_base"
+  },
+  "display_order": 10,
+  "weight": 24
+}

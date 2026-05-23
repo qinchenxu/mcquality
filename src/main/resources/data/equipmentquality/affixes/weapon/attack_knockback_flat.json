@@ -1,0 +1,17 @@
+{
+  "id": "weapon.attack_knockback_flat",
+  "equipment_types": ["weapon"],
+  "category": "utility",
+  "value": {
+    "min": 0.2,
+    "max": 0.8,
+    "precision": 1,
+    "unit": "flat"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.attack_knockback",
+    "mode": "add_flat"
+  },
+  "display_order": 30,
+  "weight": 10
+}

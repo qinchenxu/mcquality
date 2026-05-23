@@ -7,6 +7,7 @@ public final class ModNetwork {
     }
 
     public static void register(IEventBus modEventBus) {
-        // Networking for active skills and particle sync will be added here.
+        // The first playable loop currently relies on vanilla interaction sync and built-in particle packets.
+        // Add custom payloads here once active skill state or multiplayer-only status data needs explicit replication.
     }
 }

@@ -1,0 +1,13 @@
+{
+  "id": "guard_pulse",
+  "equipment_types": ["weapon"],
+  "trigger": "right_click",
+  "cooldown_ticks": 120,
+  "particle_style": "shield",
+  "primary_value": 6.0,
+  "primary_value_format": "flat",
+  "minimum_rarity": "rare",
+  "weight": 6,
+  "name_key": "skill.equipmentquality.guard_pulse",
+  "desc_key": "skill_desc.equipmentquality.guard_pulse"
+}

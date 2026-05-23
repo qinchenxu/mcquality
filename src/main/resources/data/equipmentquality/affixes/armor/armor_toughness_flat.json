@@ -1,0 +1,17 @@
+{
+  "id": "armor.armor_toughness_flat",
+  "equipment_types": ["armor"],
+  "category": "defense",
+  "value": {
+    "min": 0.5,
+    "max": 3.0,
+    "precision": 1,
+    "unit": "flat"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.armor_toughness",
+    "mode": "add_flat"
+  },
+  "display_order": 20,
+  "weight": 14
+}

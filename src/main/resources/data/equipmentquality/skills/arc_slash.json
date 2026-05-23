@@ -1,0 +1,13 @@
+{
+  "id": "arc_slash",
+  "equipment_types": ["weapon"],
+  "trigger": "right_click",
+  "cooldown_ticks": 80,
+  "particle_style": "arc",
+  "primary_value": 1.6,
+  "primary_value_format": "percent_multiplier",
+  "minimum_rarity": "uncommon",
+  "weight": 8,
+  "name_key": "skill.equipmentquality.arc_slash",
+  "desc_key": "skill_desc.equipmentquality.arc_slash"
+}

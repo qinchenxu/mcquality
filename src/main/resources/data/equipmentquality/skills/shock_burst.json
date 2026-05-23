@@ -1,0 +1,13 @@
+{
+  "id": "shock_burst",
+  "equipment_types": ["weapon"],
+  "trigger": "right_click",
+  "cooldown_ticks": 100,
+  "particle_style": "burst",
+  "primary_value": 2.4,
+  "primary_value_format": "percent_multiplier",
+  "minimum_rarity": "epic",
+  "weight": 4,
+  "name_key": "skill.equipmentquality.shock_burst",
+  "desc_key": "skill_desc.equipmentquality.shock_burst"
+}

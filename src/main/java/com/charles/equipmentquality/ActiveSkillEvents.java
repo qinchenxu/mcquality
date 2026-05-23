@@ -58,7 +58,7 @@ public final class ActiveSkillEvents {
             return false;
         }
 
-        EquipmentActiveSkill skill = EquipmentQualityData.getActiveSkill(stack);
+        EquipmentQualityData.StoredActiveSkill skill = EquipmentQualityData.getActiveSkillData(stack);
         if (skill == null || player.getCooldowns().isOnCooldown(stack.getItem())) {
             return false;
         }
@@ -67,7 +67,12 @@ public final class ActiveSkillEvents {
             return false;
         }
 
-        boolean executed = switch (skill) {
+        EquipmentActiveSkill template = skill.template();
+        if (template == null) {
+            return false;
+        }
+
+        boolean executed = switch (template) {
             case ARC_SLASH -> executeArcSlash(serverLevel, player, skill);
             case GUARD_PULSE -> executeGuardPulse(serverLevel, player, skill);
             case SHOCK_BURST -> executeShockBurst(serverLevel, player, skill);
@@ -82,7 +87,7 @@ public final class ActiveSkillEvents {
         return true;
     }
 
-    private static boolean executeArcSlash(ServerLevel level, Player player, EquipmentActiveSkill skill) {
+    private static boolean executeArcSlash(ServerLevel level, Player player, EquipmentQualityData.StoredActiveSkill skill) {
         Vec3 origin = player.position().add(0.0D, player.getBbHeight() * 0.6D, 0.0D);
         Vec3 look = player.getLookAngle().normalize();
         float damage = getSkillDamage(player, skill);
@@ -104,14 +109,14 @@ public final class ActiveSkillEvents {
 
         for (int step = 1; step <= 6; step++) {
             Vec3 point = origin.add(look.scale(step * 0.55D));
-            level.sendParticles(ParticleTypes.SWEEP_ATTACK, point.x, point.y, point.z, 1, 0.05D, 0.05D, 0.05D, 0.0D);
+            level.sendParticles(ModParticles.ARC_SLASH.get(), point.x, point.y, point.z, 3, 0.08D, 0.05D, 0.08D, 0.01D);
         }
 
         level.playSound(null, player.blockPosition(), SoundEvents.PLAYER_ATTACK_SWEEP, SoundSource.PLAYERS, 0.9F, 0.95F);
         return true;
     }
 
-    private static boolean executeGuardPulse(ServerLevel level, Player player, EquipmentActiveSkill skill) {
+    private static boolean executeGuardPulse(ServerLevel level, Player player, EquipmentQualityData.StoredActiveSkill skill) {
         player.setAbsorptionAmount(player.getAbsorptionAmount() + (float) skill.primaryValue());
 
         for (LivingEntity target : getTargets(level, player, GUARD_PULSE_RADIUS)) {
@@ -123,13 +128,13 @@ public final class ActiveSkillEvents {
             pushTarget(target, push.normalize().scale(0.95D), 0.24D);
         }
 
-        spawnPulse(level, player, ParticleTypes.END_ROD, 14, 1.3D);
-        spawnPulse(level, player, ParticleTypes.GLOW, 10, 0.8D);
+        spawnPulse(level, player, ModParticles.GUARD_PULSE.get(), 18, 1.3D);
+        spawnPulse(level, player, ModParticles.GUARD_PULSE.get(), 12, 0.8D);
         level.playSound(null, player.blockPosition(), SoundEvents.SHIELD_BLOCK, SoundSource.PLAYERS, 1.0F, 0.9F);
         return true;
     }
 
-    private static boolean executeShockBurst(ServerLevel level, Player player, EquipmentActiveSkill skill) {
+    private static boolean executeShockBurst(ServerLevel level, Player player, EquipmentQualityData.StoredActiveSkill skill) {
         float damage = getSkillDamage(player, skill);
 
         for (LivingEntity target : getTargets(level, player, SHOCK_BURST_RADIUS)) {
@@ -141,8 +146,8 @@ public final class ActiveSkillEvents {
             }
         }
 
-        level.sendParticles(ParticleTypes.EXPLOSION, player.getX(), player.getY() + 1.0D, player.getZ(), 6, 0.7D, 0.25D, 0.7D, 0.02D);
-        level.sendParticles(ParticleTypes.CRIT, player.getX(), player.getY() + 1.0D, player.getZ(), 20, 0.8D, 0.35D, 0.8D, 0.15D);
+        level.sendParticles(ModParticles.SHOCK_BURST.get(), player.getX(), player.getY() + 1.0D, player.getZ(), 24, 0.85D, 0.28D, 0.85D, 0.08D);
+        level.sendParticles(ParticleTypes.EXPLOSION, player.getX(), player.getY() + 1.0D, player.getZ(), 2, 0.35D, 0.15D, 0.35D, 0.01D);
         level.playSound(null, player.blockPosition(), SoundEvents.GENERIC_EXPLODE.value(), SoundSource.PLAYERS, 0.7F, 1.2F);
         return true;
     }
@@ -156,7 +161,7 @@ public final class ActiveSkillEvents {
             && player.hasLineOfSight(target));
     }
 
-    private static float getSkillDamage(Player player, EquipmentActiveSkill skill) {
+    private static float getSkillDamage(Player player, EquipmentQualityData.StoredActiveSkill skill) {
         double attackDamage = player.getAttributeValue(Attributes.ATTACK_DAMAGE);
         return (float) Math.max(1.0D, attackDamage * skill.primaryValue());
     }

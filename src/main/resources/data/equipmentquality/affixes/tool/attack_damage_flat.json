@@ -1,0 +1,17 @@
+{
+  "id": "tool.attack_damage_flat",
+  "equipment_types": ["tool"],
+  "category": "offense",
+  "value": {
+    "min": 0.5,
+    "max": 2.5,
+    "precision": 1,
+    "unit": "flat"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.attack_damage",
+    "mode": "add_flat"
+  },
+  "display_order": 20,
+  "weight": 10
+}

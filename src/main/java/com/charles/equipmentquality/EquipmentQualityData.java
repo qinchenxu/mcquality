@@ -192,7 +192,7 @@ public final class EquipmentQualityData {
 
     private static List<Component> getActiveSkillLines(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
-        EquipmentActiveSkill skill = getActiveSkill(stack);
+        StoredActiveSkill skill = getActiveSkillData(stack);
         if (skill == null) {
             lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_active_skill").withStyle(ChatFormatting.GRAY));
             lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.skill_hint").withStyle(ChatFormatting.DARK_GRAY));
@@ -240,11 +240,35 @@ public final class EquipmentQualityData {
 
     @Nullable
     public static EquipmentActiveSkill getActiveSkill(ItemStack stack) {
+        StoredActiveSkill activeSkill = getActiveSkillData(stack);
+        return activeSkill != null ? activeSkill.template() : null;
+    }
+
+    @Nullable
+    public static StoredActiveSkill getActiveSkillData(ItemStack stack) {
         CompoundTag dataRoot = getDataRoot(stack);
         if (dataRoot != null && dataRoot.contains(ACTIVE_SKILL_DATA_TAG, Tag.TAG_COMPOUND)) {
             CompoundTag activeSkillTag = dataRoot.getCompound(ACTIVE_SKILL_DATA_TAG);
             if (activeSkillTag.contains(ID_TAG, Tag.TAG_STRING)) {
-                return EquipmentActiveSkill.byId(activeSkillTag.getString(ID_TAG));
+                String skillId = activeSkillTag.getString(ID_TAG);
+                EquipmentSkillDefinition definition = EquipmentSkillDefinition.byId(skillId);
+                EquipmentActiveSkill template = EquipmentActiveSkill.byId(skillId);
+
+                return new StoredActiveSkill(
+                    skillId,
+                    activeSkillTag.contains(TRIGGER_TAG, Tag.TAG_STRING)
+                        ? activeSkillTag.getString(TRIGGER_TAG)
+                        : definition != null ? definition.triggerId() : template != null ? template.triggerId() : "right_click",
+                    activeSkillTag.contains(COOLDOWN_TICKS_TAG, Tag.TAG_INT)
+                        ? activeSkillTag.getInt(COOLDOWN_TICKS_TAG)
+                        : definition != null ? definition.cooldownTicks() : template != null ? template.cooldownTicks() : 0,
+                    activeSkillTag.contains(PARTICLE_STYLE_TAG, Tag.TAG_STRING)
+                        ? activeSkillTag.getString(PARTICLE_STYLE_TAG)
+                        : definition != null ? definition.particleStyleId() : template != null ? template.particleStyleId() : skillId,
+                    activeSkillTag.contains(PRIMARY_VALUE_TAG, Tag.TAG_DOUBLE)
+                        ? activeSkillTag.getDouble(PRIMARY_VALUE_TAG)
+                        : definition != null ? definition.primaryValue() : template != null ? template.primaryValue() : 0.0D
+                );
             }
         }
 
@@ -254,7 +278,8 @@ public final class EquipmentQualityData {
             return null;
         }
 
-        return EquipmentActiveSkill.byId(tag.getString(LEGACY_ACTIVE_SKILL_TAG));
+        EquipmentActiveSkill legacySkill = EquipmentActiveSkill.byId(tag.getString(LEGACY_ACTIVE_SKILL_TAG));
+        return legacySkill != null ? StoredActiveSkill.fromLegacy(legacySkill) : null;
     }
 
     @Nullable
@@ -365,7 +390,7 @@ public final class EquipmentQualityData {
     }
 
     private static GeneratedDetails writeDerivedDetails(CompoundTag dataRoot, ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
-        EquipmentActiveSkill activeSkill = pickActiveSkill(stack, quality, random);
+        EquipmentSkillDefinition activeSkill = pickActiveSkill(stack, quality, random);
         EquipmentPassiveEffect passiveEffect = pickPassiveEffect(stack, quality, random);
 
         if (activeSkill != null) {
@@ -418,36 +443,21 @@ public final class EquipmentQualityData {
     }
 
     @Nullable
-    private static EquipmentActiveSkill pickActiveSkill(ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
+    private static EquipmentSkillDefinition pickActiveSkill(ItemStack stack, EquipmentQuality quality, @Nullable RandomSource random) {
         if (!(stack.getItem() instanceof TieredItem)) {
             return null;
         }
 
         if (random == null) {
             return switch (quality) {
-                case RARE -> EquipmentActiveSkill.ARC_SLASH;
-                case EPIC -> EquipmentActiveSkill.GUARD_PULSE;
-                case LEGENDARY -> EquipmentActiveSkill.SHOCK_BURST;
+                case RARE -> EquipmentSkillDefinition.byId(EquipmentActiveSkill.ARC_SLASH.id());
+                case EPIC -> EquipmentSkillDefinition.byId(EquipmentActiveSkill.GUARD_PULSE.id());
+                case LEGENDARY -> EquipmentSkillDefinition.byId(EquipmentActiveSkill.SHOCK_BURST.id());
                 default -> null;
             };
         }
 
-        if (random.nextDouble() > quality.skillChance()) {
-            return null;
-        }
-
-        List<EquipmentActiveSkill> candidates = new ArrayList<>();
-        if (quality.displayPriority() >= EquipmentQuality.UNCOMMON.displayPriority()) {
-            candidates.add(EquipmentActiveSkill.ARC_SLASH);
-        }
-        if (quality.displayPriority() >= EquipmentQuality.RARE.displayPriority()) {
-            candidates.add(EquipmentActiveSkill.GUARD_PULSE);
-        }
-        if (quality.displayPriority() >= EquipmentQuality.EPIC.displayPriority()) {
-            candidates.add(EquipmentActiveSkill.SHOCK_BURST);
-        }
-
-        return candidates.isEmpty() ? null : candidates.get(random.nextInt(candidates.size()));
+        return EquipmentSkillDefinition.randomFor(stack, quality, random);
     }
 
     @Nullable
@@ -567,7 +577,7 @@ public final class EquipmentQualityData {
         }
     }
 
-    private static void applyQualityLore(ItemStack stack, EquipmentQuality quality, int affixCount, @Nullable EquipmentActiveSkill activeSkill) {
+    private static void applyQualityLore(ItemStack stack, EquipmentQuality quality, int affixCount, @Nullable EquipmentSkillDefinition activeSkill) {
         List<Component> loreLines = new ArrayList<>();
         loreLines.add(Component.translatable("tooltip." + EquipmentQualityMod.MOD_ID + ".quality", quality.displayName()).withStyle(ChatFormatting.DARK_GRAY));
         loreLines.add(Component.translatable(
@@ -610,6 +620,57 @@ public final class EquipmentQualityData {
         return new AttributeModifier(modifier.id(), adjustedAmount, modifier.operation());
     }
 
-    private record GeneratedDetails(@Nullable EquipmentActiveSkill activeSkill, @Nullable EquipmentPassiveEffect passiveEffect) {
+    public record StoredActiveSkill(String id, String triggerId, int cooldownTicks, String particleStyleId, double primaryValue) {
+        @Nullable
+        public EquipmentActiveSkill template() {
+            return EquipmentActiveSkill.byId(id);
+        }
+
+        public Component displayName() {
+            EquipmentSkillDefinition definition = EquipmentSkillDefinition.byId(id);
+            if (definition != null) {
+                return definition.displayName();
+            }
+
+            EquipmentActiveSkill skill = template();
+            return skill != null ? skill.displayName() : Component.literal(id);
+        }
+
+        public Component description() {
+            EquipmentSkillDefinition definition = EquipmentSkillDefinition.byId(id);
+            if (definition != null) {
+                return Component.translatable(definition.descKey(), definition.formatPrimaryValue(primaryValue));
+            }
+
+            return Component.translatable("skill_desc." + EquipmentQualityMod.MOD_ID + "." + id, formatPrimaryValue());
+        }
+
+        public Component triggerName() {
+            return Component.translatable("skill_trigger." + EquipmentQualityMod.MOD_ID + "." + triggerId);
+        }
+
+        public Component particleStyleName() {
+            return Component.translatable("particle_style." + EquipmentQualityMod.MOD_ID + "." + particleStyleId);
+        }
+
+        public String formatPrimaryValue() {
+            EquipmentSkillDefinition definition = EquipmentSkillDefinition.byId(id);
+            if (definition != null) {
+                return definition.formatPrimaryValue(primaryValue);
+            }
+
+            EquipmentActiveSkill skill = template();
+            if (skill == EquipmentActiveSkill.ARC_SLASH || skill == EquipmentActiveSkill.SHOCK_BURST) {
+                return String.format(java.util.Locale.ROOT, "%.1f%%", primaryValue * 100.0D);
+            }
+            return String.format(java.util.Locale.ROOT, "%.1f", primaryValue);
+        }
+
+        public static StoredActiveSkill fromLegacy(EquipmentActiveSkill skill) {
+            return new StoredActiveSkill(skill.id(), skill.triggerId(), skill.cooldownTicks(), skill.particleStyleId(), skill.primaryValue());
+        }
+    }
+
+    private record GeneratedDetails(@Nullable EquipmentSkillDefinition activeSkill, @Nullable EquipmentPassiveEffect passiveEffect) {
     }
 }

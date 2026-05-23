@@ -1,0 +1,17 @@
+{
+  "id": "tool.block_break_speed_percent",
+  "equipment_types": ["tool"],
+  "category": "utility",
+  "value": {
+    "min": 6.0,
+    "max": 18.0,
+    "precision": 1,
+    "unit": "percent"
+  },
+  "attribute_effect": {
+    "target": "minecraft:player.block_break_speed",
+    "mode": "multiply_base"
+  },
+  "display_order": 30,
+  "weight": 18
+}

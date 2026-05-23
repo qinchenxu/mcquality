@@ -1,0 +1,17 @@
+{
+  "id": "tool.mining_speed_percent",
+  "equipment_types": ["tool"],
+  "category": "utility",
+  "value": {
+    "min": 6.0,
+    "max": 20.0,
+    "precision": 1,
+    "unit": "percent"
+  },
+  "attribute_effect": {
+    "target": "minecraft:player.mining_efficiency",
+    "mode": "multiply_base"
+  },
+  "display_order": 10,
+  "weight": 24
+}

@@ -1,5 +1,8 @@
 package com.charles.equipmentquality;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
 import net.minecraft.network.chat.Component;
@@ -18,41 +21,37 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 public record EquipmentAffixDefinition(
     String id,
-    EquipmentKind kind,
+    Set<EquipmentKind> kinds,
     String category,
     double minValue,
     double maxValue,
+    int precision,
     String unit,
     int displayOrder,
     int weight,
     Holder<Attribute> attribute,
     AttributeModifier.Operation operation
 ) {
-    private static final List<EquipmentAffixDefinition> WEAPON_DEFINITIONS = List.of(
-        new EquipmentAffixDefinition("weapon.attack_damage_percent", EquipmentKind.WEAPON, "offense", 4.0D, 18.0D, "percent", 10, 24, Attributes.ATTACK_DAMAGE, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
-        new EquipmentAffixDefinition("weapon.attack_speed_flat", EquipmentKind.WEAPON, "offense", 0.1D, 0.5D, "flat", 20, 16, Attributes.ATTACK_SPEED, AttributeModifier.Operation.ADD_VALUE),
-        new EquipmentAffixDefinition("weapon.attack_knockback_flat", EquipmentKind.WEAPON, "utility", 0.2D, 0.8D, "flat", 30, 10, Attributes.ATTACK_KNOCKBACK, AttributeModifier.Operation.ADD_VALUE)
+    private static final List<EquipmentAffixDefinition> FALLBACK_DEFINITIONS = List.of(
+        new EquipmentAffixDefinition("weapon.attack_damage_percent", Set.of(EquipmentKind.WEAPON), "offense", 4.0D, 18.0D, 1, "percent", 10, 24, Attributes.ATTACK_DAMAGE, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
+        new EquipmentAffixDefinition("weapon.attack_speed_flat", Set.of(EquipmentKind.WEAPON), "offense", 0.1D, 0.5D, 1, "flat", 20, 16, Attributes.ATTACK_SPEED, AttributeModifier.Operation.ADD_VALUE),
+        new EquipmentAffixDefinition("weapon.attack_knockback_flat", Set.of(EquipmentKind.WEAPON), "utility", 0.2D, 0.8D, 1, "flat", 30, 10, Attributes.ATTACK_KNOCKBACK, AttributeModifier.Operation.ADD_VALUE),
+        new EquipmentAffixDefinition("armor.armor_percent", Set.of(EquipmentKind.ARMOR), "defense", 4.0D, 16.0D, 1, "percent", 10, 24, Attributes.ARMOR, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
+        new EquipmentAffixDefinition("armor.armor_toughness_flat", Set.of(EquipmentKind.ARMOR), "defense", 0.5D, 3.0D, 1, "flat", 20, 14, Attributes.ARMOR_TOUGHNESS, AttributeModifier.Operation.ADD_VALUE),
+        new EquipmentAffixDefinition("armor.knockback_resistance_flat", Set.of(EquipmentKind.ARMOR), "defense", 0.03D, 0.12D, 2, "flat", 30, 8, Attributes.KNOCKBACK_RESISTANCE, AttributeModifier.Operation.ADD_VALUE),
+        new EquipmentAffixDefinition("tool.mining_speed_percent", Set.of(EquipmentKind.TOOL), "utility", 6.0D, 20.0D, 1, "percent", 10, 24, Attributes.MINING_EFFICIENCY, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
+        new EquipmentAffixDefinition("tool.attack_damage_flat", Set.of(EquipmentKind.TOOL), "offense", 0.5D, 2.5D, 1, "flat", 20, 10, Attributes.ATTACK_DAMAGE, AttributeModifier.Operation.ADD_VALUE),
+        new EquipmentAffixDefinition("tool.block_break_speed_percent", Set.of(EquipmentKind.TOOL), "utility", 6.0D, 18.0D, 1, "percent", 30, 18, Attributes.BLOCK_BREAK_SPEED, AttributeModifier.Operation.ADD_MULTIPLIED_BASE)
     );
-    private static final List<EquipmentAffixDefinition> ARMOR_DEFINITIONS = List.of(
-        new EquipmentAffixDefinition("armor.armor_percent", EquipmentKind.ARMOR, "defense", 4.0D, 16.0D, "percent", 10, 24, Attributes.ARMOR, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
-        new EquipmentAffixDefinition("armor.armor_toughness_flat", EquipmentKind.ARMOR, "defense", 0.5D, 3.0D, "flat", 20, 14, Attributes.ARMOR_TOUGHNESS, AttributeModifier.Operation.ADD_VALUE),
-        new EquipmentAffixDefinition("armor.knockback_resistance_flat", EquipmentKind.ARMOR, "defense", 0.03D, 0.12D, "flat", 30, 8, Attributes.KNOCKBACK_RESISTANCE, AttributeModifier.Operation.ADD_VALUE)
-    );
-    private static final List<EquipmentAffixDefinition> TOOL_DEFINITIONS = List.of(
-        new EquipmentAffixDefinition("tool.mining_speed_percent", EquipmentKind.TOOL, "utility", 6.0D, 20.0D, "percent", 10, 24, Attributes.MINING_EFFICIENCY, AttributeModifier.Operation.ADD_MULTIPLIED_BASE),
-        new EquipmentAffixDefinition("tool.attack_damage_flat", EquipmentKind.TOOL, "offense", 0.5D, 2.5D, "flat", 20, 10, Attributes.ATTACK_DAMAGE, AttributeModifier.Operation.ADD_VALUE),
-        new EquipmentAffixDefinition("tool.block_break_speed_percent", EquipmentKind.TOOL, "utility", 6.0D, 18.0D, "percent", 30, 18, Attributes.BLOCK_BREAK_SPEED, AttributeModifier.Operation.ADD_MULTIPLIED_BASE)
-    );
-    private static final List<EquipmentAffixDefinition> ALL_DEFINITIONS = List.of(
-        WEAPON_DEFINITIONS.get(0), WEAPON_DEFINITIONS.get(1), WEAPON_DEFINITIONS.get(2),
-        ARMOR_DEFINITIONS.get(0), ARMOR_DEFINITIONS.get(1), ARMOR_DEFINITIONS.get(2),
-        TOOL_DEFINITIONS.get(0), TOOL_DEFINITIONS.get(1), TOOL_DEFINITIONS.get(2)
-    );
+    private static volatile Map<String, EquipmentAffixDefinition> loadedDefinitions = Map.of();
 
     public static List<EquipmentAffixInstance> rollAffixes(ItemStack stack, EquipmentQuality quality, RandomSource random) {
         List<EquipmentAffixDefinition> pool = new ArrayList<>(poolFor(stack));
@@ -91,12 +90,50 @@ public record EquipmentAffixDefinition(
 
     @Nullable
     public static EquipmentAffixDefinition byId(String id) {
-        for (EquipmentAffixDefinition definition : ALL_DEFINITIONS) {
-            if (definition.id.equals(id)) {
-                return definition;
-            }
+        Map<String, EquipmentAffixDefinition> definitionsById = activeDefinitionsById();
+        return definitionsById.get(id);
+    }
+
+    public static void replaceLoadedDefinitions(List<EquipmentAffixDefinition> definitions) {
+        if (definitions.isEmpty()) {
+            loadedDefinitions = Map.of();
+            return;
         }
-        return null;
+
+        Map<String, EquipmentAffixDefinition> definitionsById = new LinkedHashMap<>();
+        for (EquipmentAffixDefinition definition : definitions) {
+            definitionsById.put(definition.id(), definition);
+        }
+        loadedDefinitions = Map.copyOf(definitionsById);
+    }
+
+    @Nullable
+    public static EquipmentAffixDefinition fromJson(JsonObject json) {
+        if (!json.has("id") || !json.has("value") || !json.has("attribute_effect")) {
+            return null;
+        }
+
+        JsonObject valueObject = json.getAsJsonObject("value");
+        JsonObject attributeEffectObject = json.getAsJsonObject("attribute_effect");
+        Set<EquipmentKind> parsedKinds = parseKinds(json);
+        Holder<Attribute> parsedAttribute = resolveAttribute(requiredString(attributeEffectObject, "target"));
+        if (parsedKinds.isEmpty() || parsedAttribute == null) {
+            return null;
+        }
+
+        return new EquipmentAffixDefinition(
+            requiredString(json, "id"),
+            parsedKinds,
+            optionalString(json, "category", "utility"),
+            requiredDouble(valueObject, "min"),
+            requiredDouble(valueObject, "max"),
+            optionalInt(valueObject, "precision", 1),
+            optionalString(valueObject, "unit", "flat"),
+            optionalInt(json, "display_order", 100),
+            optionalInt(json, "weight", 10),
+            parsedAttribute,
+            resolveOperation(optionalString(attributeEffectObject, "mode", "add_flat"))
+        );
     }
 
     public static EquipmentSlotGroup resolveSlotGroup(ItemStack stack) {
@@ -147,11 +184,72 @@ public record EquipmentAffixDefinition(
             return List.of();
         }
 
-        return switch (kind) {
-            case WEAPON -> WEAPON_DEFINITIONS;
-            case ARMOR -> ARMOR_DEFINITIONS;
-            case TOOL -> TOOL_DEFINITIONS;
+        List<EquipmentAffixDefinition> matchingDefinitions = new ArrayList<>();
+        for (EquipmentAffixDefinition definition : activeDefinitions()) {
+            if (definition.kinds().contains(kind)) {
+                matchingDefinitions.add(definition);
+            }
+        }
+        return matchingDefinitions;
+    }
+
+    private static Map<String, EquipmentAffixDefinition> activeDefinitionsById() {
+        if (!loadedDefinitions.isEmpty()) {
+            return loadedDefinitions;
+        }
+
+        Map<String, EquipmentAffixDefinition> fallbackDefinitions = new LinkedHashMap<>();
+        for (EquipmentAffixDefinition definition : FALLBACK_DEFINITIONS) {
+            fallbackDefinitions.put(definition.id(), definition);
+        }
+        return fallbackDefinitions;
+    }
+
+    private static List<EquipmentAffixDefinition> activeDefinitions() {
+        return new ArrayList<>(activeDefinitionsById().values());
+    }
+
+    private static double rollValue(EquipmentAffixDefinition definition, RandomSource random) {
+        double rawValue = definition.minValue() + (random.nextDouble() * (definition.maxValue() - definition.minValue()));
+        double scale = Math.pow(10.0D, Math.max(0, definition.precision()));
+        return Math.round(rawValue * scale) / scale;
+    }
+
+    @Nullable
+    public static EquipmentKind resolveKind(ItemStack stack) {
+        if (stack.getItem() instanceof ArmorItem) {
+            return EquipmentKind.ARMOR;
+        }
+        if (stack.getItem() instanceof DiggerItem) {
+            return EquipmentKind.TOOL;
+        }
+        if (stack.getItem() instanceof TieredItem) {
+            return EquipmentKind.WEAPON;
+        }
+        return null;
+    }
+
+    private static Set<EquipmentKind> parseKinds(JsonObject json) {
+        if (json.has("equipment_types") && json.get("equipment_types").isJsonArray()) {
+            JsonArray array = json.getAsJsonArray("equipment_types");
+            java.util.LinkedHashSet<EquipmentKind> kinds = new java.util.LinkedHashSet<>();
+            for (JsonElement element : array) {
+                EquipmentKind kind = EquipmentKind.byId(element.getAsString());
+                if (kind != null) {
+                    kinds.add(kind);
+                }
+            }
+            return Set.copyOf(kinds);
+        }
+
+        if (json.has("equipment_type")) {
+            EquipmentKind kind = EquipmentKind.byId(json.get("equipment_type").getAsString());
+            if (kind != null) {
+                return Set.of(kind);
+            }
         };
+
+        return Set.of();
     }
 
     @Nullable
@@ -177,23 +275,43 @@ public record EquipmentAffixDefinition(
         return definitions.get(definitions.size() - 1);
     }
 
-    private static double rollValue(EquipmentAffixDefinition definition, RandomSource random) {
-        double rawValue = definition.minValue() + (random.nextDouble() * (definition.maxValue() - definition.minValue()));
-        return Math.round(rawValue * 10.0D) / 10.0D;
+    @Nullable
+    private static Holder<Attribute> resolveAttribute(String target) {
+        return switch (target) {
+            case "minecraft:generic.attack_damage" -> Attributes.ATTACK_DAMAGE;
+            case "minecraft:generic.attack_speed" -> Attributes.ATTACK_SPEED;
+            case "minecraft:generic.attack_knockback" -> Attributes.ATTACK_KNOCKBACK;
+            case "minecraft:generic.armor" -> Attributes.ARMOR;
+            case "minecraft:generic.armor_toughness" -> Attributes.ARMOR_TOUGHNESS;
+            case "minecraft:generic.knockback_resistance" -> Attributes.KNOCKBACK_RESISTANCE;
+            case "minecraft:player.mining_efficiency" -> Attributes.MINING_EFFICIENCY;
+            case "minecraft:player.block_break_speed" -> Attributes.BLOCK_BREAK_SPEED;
+            default -> null;
+        };
     }
 
-    @Nullable
-    private static EquipmentKind resolveKind(ItemStack stack) {
-        if (stack.getItem() instanceof ArmorItem) {
-            return EquipmentKind.ARMOR;
-        }
-        if (stack.getItem() instanceof DiggerItem) {
-            return EquipmentKind.TOOL;
-        }
-        if (stack.getItem() instanceof TieredItem) {
-            return EquipmentKind.WEAPON;
-        }
-        return null;
+    private static AttributeModifier.Operation resolveOperation(String mode) {
+        return switch (mode) {
+            case "multiply_base" -> AttributeModifier.Operation.ADD_MULTIPLIED_BASE;
+            case "multiply_total" -> AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL;
+            default -> AttributeModifier.Operation.ADD_VALUE;
+        };
+    }
+
+    private static String requiredString(JsonObject json, String key) {
+        return json.get(key).getAsString();
+    }
+
+    private static String optionalString(JsonObject json, String key, String fallback) {
+        return json.has(key) ? json.get(key).getAsString() : fallback;
+    }
+
+    private static double requiredDouble(JsonObject json, String key) {
+        return json.get(key).getAsDouble();
+    }
+
+    private static int optionalInt(JsonObject json, String key, int fallback) {
+        return json.has(key) ? json.get(key).getAsInt() : fallback;
     }
 
     private static String formatSignedDecimal(double value) {
@@ -208,6 +326,16 @@ public record EquipmentAffixDefinition(
     public enum EquipmentKind {
         WEAPON,
         ARMOR,
-        TOOL
+        TOOL;
+
+        @Nullable
+        public static EquipmentKind byId(String id) {
+            return switch (id) {
+                case "weapon" -> WEAPON;
+                case "armor" -> ARMOR;
+                case "tool" -> TOOL;
+                default -> null;
+            };
+        }
     }
 }

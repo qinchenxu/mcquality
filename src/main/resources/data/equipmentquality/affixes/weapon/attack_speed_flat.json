@@ -1,0 +1,17 @@
+{
+  "id": "weapon.attack_speed_flat",
+  "equipment_types": ["weapon"],
+  "category": "offense",
+  "value": {
+    "min": 0.1,
+    "max": 0.5,
+    "precision": 1,
+    "unit": "flat"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.attack_speed",
+    "mode": "add_flat"
+  },
+  "display_order": 20,
+  "weight": 16
+}

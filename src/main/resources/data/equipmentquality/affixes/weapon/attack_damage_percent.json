@@ -1,0 +1,17 @@
+{
+  "id": "weapon.attack_damage_percent",
+  "equipment_types": ["weapon"],
+  "category": "offense",
+  "value": {
+    "min": 4.0,
+    "max": 18.0,
+    "precision": 1,
+    "unit": "percent"
+  },
+  "attribute_effect": {
+    "target": "minecraft:generic.attack_damage",
+    "mode": "multiply_base"
+  },
+  "display_order": 10,
+  "weight": 24
+}
