@@ -1,6 +1,7 @@
 package com.charles.equipmentquality;
 
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.Holder;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -8,6 +9,7 @@ import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
@@ -20,8 +22,10 @@ import net.minecraft.world.item.component.ItemLore;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 public final class EquipmentQualityData {
     private static final String DATA_ROOT_TAG = "EquipmentQuality";
@@ -155,16 +159,13 @@ public final class EquipmentQualityData {
 
     private static List<Component> getAttributeLines(ItemStack stack) {
         List<Component> lines = new ArrayList<>();
-        ItemAttributeModifiers attributeModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
-        if (attributeModifiers.modifiers().isEmpty()) {
-            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_attributes").withStyle(ChatFormatting.GRAY));
-            return lines;
-        }
-
-        for (ItemAttributeModifiers.Entry entry : attributeModifiers.modifiers()) {
+        for (ResolvedAttributeEntry entry : collectEffectiveModifiers(stack).entries()) {
             lines.add(formatAttributeLine(entry.attribute().value(), entry.modifier()));
         }
 
+        if (lines.isEmpty()) {
+            lines.add(Component.translatable("screen." + EquipmentQualityMod.MOD_ID + ".details.no_attributes").withStyle(ChatFormatting.GRAY));
+        }
         return lines;
     }
 
@@ -539,10 +540,10 @@ public final class EquipmentQualityData {
     }
 
     private static void applyAffixModifiers(ItemStack stack, List<EquipmentAffixInstance> affixes) {
-        ItemAttributeModifiers baseModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        CollectedModifiers collectedModifiers = collectEffectiveModifiers(stack);
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
-        for (ItemAttributeModifiers.Entry entry : baseModifiers.modifiers()) {
-            builder.add(entry.attribute(), entry.modifier(), entry.slot());
+        for (ResolvedAttributeEntry entry : collectedModifiers.entries()) {
+            builder.add(entry.attribute(), entry.modifier(), entry.slotGroup());
         }
 
         for (EquipmentAffixInstance affix : affixes) {
@@ -551,14 +552,19 @@ public final class EquipmentQualityData {
                 continue;
             }
 
-            builder.add(definition.attribute(), definition.createModifier(affix), EquipmentAffixDefinition.resolveSlotGroup(stack));
+            double resolvedAmount = resolveAffixAmount(definition, affix, collectedModifiers.additiveBaseAmounts());
+            if (Double.compare(resolvedAmount, 0.0D) == 0) {
+                continue;
+            }
+
+            builder.add(definition.attribute(), definition.createResolvedModifier(resolvedAmount), collectedModifiers.slotGroup());
         }
 
-        stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(baseModifiers.showInTooltip()));
+        stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(collectedModifiers.showInTooltip()));
     }
 
     private static void applyQualityModifiers(ItemStack stack, EquipmentQuality quality) {
-        ItemAttributeModifiers baseModifiers = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY);
+        CollectedModifiers collectedModifiers = collectEffectiveModifiers(stack);
         double factor = 1.0D + quality.multiplierBonus();
         if (factor <= 0.0D) {
             return;
@@ -566,15 +572,42 @@ public final class EquipmentQualityData {
 
         ItemAttributeModifiers.Builder builder = ItemAttributeModifiers.builder();
         boolean changed = false;
-        for (ItemAttributeModifiers.Entry entry : baseModifiers.modifiers()) {
+        for (ResolvedAttributeEntry entry : collectedModifiers.entries()) {
             AttributeModifier scaledModifier = scaleModifier(entry.attribute().value(), entry.modifier(), factor);
-            builder.add(entry.attribute(), scaledModifier != null ? scaledModifier : entry.modifier(), entry.slot());
+            builder.add(entry.attribute(), scaledModifier != null ? scaledModifier : entry.modifier(), entry.slotGroup());
             changed |= scaledModifier != null;
         }
 
         if (changed) {
-            stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(baseModifiers.showInTooltip()));
+            stack.set(DataComponents.ATTRIBUTE_MODIFIERS, builder.build().withTooltip(collectedModifiers.showInTooltip()));
         }
+    }
+
+    private static double resolveAffixAmount(
+        EquipmentAffixDefinition definition,
+        EquipmentAffixInstance affix,
+        Map<Holder<Attribute>, Double> additiveBaseAmounts
+    ) {
+        if (!definition.usesPercentValue()) {
+            return affix.value();
+        }
+
+        double baseAmount = additiveBaseAmounts.getOrDefault(definition.attribute(), 0.0D);
+        return baseAmount * (affix.value() / 100.0D);
+    }
+
+    private static CollectedModifiers collectEffectiveModifiers(ItemStack stack) {
+        EquipmentSlotGroup slotGroup = EquipmentAffixDefinition.resolveSlotGroup(stack);
+        boolean showInTooltip = stack.getOrDefault(DataComponents.ATTRIBUTE_MODIFIERS, ItemAttributeModifiers.EMPTY).showInTooltip();
+        List<ResolvedAttributeEntry> entries = new ArrayList<>();
+        Map<Holder<Attribute>, Double> additiveBaseAmounts = new LinkedHashMap<>();
+        stack.forEachModifier(slotGroup, (attribute, modifier) -> {
+            entries.add(new ResolvedAttributeEntry(attribute, modifier, slotGroup));
+            if (modifier.operation() == AttributeModifier.Operation.ADD_VALUE) {
+                additiveBaseAmounts.merge(attribute, modifier.amount(), Double::sum);
+            }
+        });
+        return new CollectedModifiers(slotGroup, showInTooltip, entries, additiveBaseAmounts);
     }
 
     private static void applyQualityLore(ItemStack stack, EquipmentQuality quality, int affixCount, @Nullable EquipmentSkillDefinition activeSkill) {
@@ -669,6 +702,17 @@ public final class EquipmentQualityData {
         public static StoredActiveSkill fromLegacy(EquipmentActiveSkill skill) {
             return new StoredActiveSkill(skill.id(), skill.triggerId(), skill.cooldownTicks(), skill.particleStyleId(), skill.primaryValue());
         }
+    }
+
+    private record ResolvedAttributeEntry(Holder<Attribute> attribute, AttributeModifier modifier, EquipmentSlotGroup slotGroup) {
+    }
+
+    private record CollectedModifiers(
+        EquipmentSlotGroup slotGroup,
+        boolean showInTooltip,
+        List<ResolvedAttributeEntry> entries,
+        Map<Holder<Attribute>, Double> additiveBaseAmounts
+    ) {
     }
 
     private record GeneratedDetails(@Nullable EquipmentSkillDefinition activeSkill, @Nullable EquipmentPassiveEffect passiveEffect) {

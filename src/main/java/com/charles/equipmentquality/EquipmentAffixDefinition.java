@@ -151,13 +151,25 @@ public record EquipmentAffixDefinition(
         return EquipmentSlotGroup.MAINHAND;
     }
 
+    public boolean usesPercentValue() {
+        return "percent".equals(unit);
+    }
+
     public AttributeModifier createModifier(EquipmentAffixInstance instance) {
-        double amount = "percent".equals(unit) ? instance.value() / 100.0D : instance.value();
+        double amount = usesPercentValue() ? instance.value() / 100.0D : instance.value();
+        return createModifier(amount, operation);
+    }
+
+    public AttributeModifier createResolvedModifier(double amount) {
+        return createModifier(amount, usesPercentValue() ? AttributeModifier.Operation.ADD_VALUE : operation);
+    }
+
+    private AttributeModifier createModifier(double amount, AttributeModifier.Operation resolvedOperation) {
         ResourceLocation modifierId = ResourceLocation.fromNamespaceAndPath(
             EquipmentQualityMod.MOD_ID,
             "affix_" + id.replace('.', '_')
         );
-        return new AttributeModifier(modifierId, amount, operation);
+        return new AttributeModifier(modifierId, amount, resolvedOperation);
     }
 
     public Component buildDisplayLine(EquipmentAffixInstance instance) {
